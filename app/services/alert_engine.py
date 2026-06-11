@@ -45,6 +45,8 @@ def _process_exceed_type(
             db.add(record)
         else:
             record.count += 1
+            if record.count == 1:
+                record.first_exceeded_at = timestamp
 
         if record.count >= 3:
             duration = int((timestamp - record.first_exceeded_at).total_seconds())

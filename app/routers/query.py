@@ -71,19 +71,23 @@ def query_history(
 
 
 def _interpolate(target: datetime, data_map: dict) -> MinuteDataPoint:
+    if not data_map:
+        return MinuteDataPoint(minute=target, avg_temperature=0.0, avg_humidity=0.0)
+
     before_point = None
     after_point = None
+    min_key = min(data_map.keys())
+    max_key = max(data_map.keys())
 
     delta = timedelta(minutes=1)
     t = target - delta
-    while t >= min(data_map.keys(), default=target):
+    while t >= min_key:
         if t in data_map:
             before_point = data_map[t]
             break
         t -= delta
 
     t = target + delta
-    max_key = max(data_map.keys(), default=target)
     while t <= max_key:
         if t in data_map:
             after_point = data_map[t]

@@ -14,7 +14,16 @@ def upload_data(req: DataUploadRequest, db: Session = Depends(get_db)):
     duplicates = 0
     received = 0
 
-    for item in req.data:
+    sorted_items = sorted(req.data, key=lambda x: x.timestamp)
+
+    seen_keys = set()
+    for item in sorted_items:
+        key = (item.sensor_id, item.timestamp)
+        if key in seen_keys:
+            duplicates += 1
+            continue
+        seen_keys.add(key)
+
         stmt = sqlite_insert(SensorData).values(
             sensor_id=item.sensor_id,
             temperature=item.temperature,
