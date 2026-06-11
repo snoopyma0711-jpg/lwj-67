@@ -77,3 +77,17 @@ class ZoneAlertStats(BaseModel):
 
 class AlertStatsResponse(BaseModel):
     stats: list[ZoneAlertStats]
+
+
+class SensorHealthItem(BaseModel):
+    sensor_id: str
+    status: str
+    score: int
+    report_count: int
+    exceed_count: int
+    last_report_time: Optional[datetime] = None
+
+
+class SensorHealthDashboardResponse(BaseModel):
+    zone_name: str
+    sensors: list[SensorHealthItem]

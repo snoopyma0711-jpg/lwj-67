@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_
-from datetime import datetime
+from sqlalchemy import and_, func
+from datetime import datetime, timedelta
 from app.database import get_db
-from app.models import Alert, Zone
-from app.schemas import AlertItem, AlertListResponse, ResolveAlertRequest, AlertStatsResponse, ZoneAlertStats
+from app.models import Alert, Zone, Sensor, SensorData
+from app.schemas import (
+    AlertItem, AlertListResponse, ResolveAlertRequest,
+    AlertStatsResponse, ZoneAlertStats,
+    SensorHealthItem, SensorHealthDashboardResponse,
+)
 
 router = APIRouter(prefix="/api/alerts", tags=["告警管理"])
 
@@ -106,3 +110,64 @@ def alert_stats(
         ))
 
     return AlertStatsResponse(stats=stats)
+
+
+@router.get("/health-dashboard", response_model=SensorHealthDashboardResponse, summary="传感器健康度看板")
+def sensor_health_dashboard(
+    zone_name: str = Query(..., description="区域名称"),
+    db: Session = Depends(get_db),
+):
+    zone = db.query(Zone).filter(Zone.name == zone_name).first()
+    if not zone:
+        return SensorHealthDashboardResponse(zone_name=zone_name, sensors=[])
+
+    sensors = db.query(Sensor).filter(Sensor.zone_id == zone.id).all()
+    if not sensors:
+        return SensorHealthDashboardResponse(zone_name=zone_name, sensors=[])
+
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    expected_reports = 720
+    min_reports_threshold = int(expected_reports * 0.8)
+
+    result = []
+    for sensor in sensors:
+        sensor_id = sensor.sensor_id
+
+        recent_data = db.query(SensorData).filter(
+            and_(
+                SensorData.sensor_id == sensor_id,
+                SensorData.timestamp >= one_hour_ago,
+            )
+        ).order_by(SensorData.timestamp.asc()).all()
+
+        report_count = len(recent_data)
+        last_report_time = recent_data[-1].timestamp if recent_data else None
+
+        exceed_count = 0
+        for data in recent_data:
+            temp_exceeded = data.temperature < zone.temp_lower or data.temperature > zone.temp_upper
+            humidity_exceeded = data.humidity < zone.humidity_lower or data.humidity > zone.humidity_upper
+            if temp_exceeded or humidity_exceeded:
+                exceed_count += 1
+
+        if report_count < min_reports_threshold:
+            status = "离线"
+            score = 0
+        elif report_count > 0 and exceed_count / report_count > 0.5:
+            status = "异常"
+            normal_count = report_count - exceed_count
+            score = int((normal_count / report_count) * 100)
+        else:
+            status = "正常"
+            score = 100
+
+        result.append(SensorHealthItem(
+            sensor_id=sensor_id,
+            status=status,
+            score=score,
+            report_count=report_count,
+            exceed_count=exceed_count,
+            last_report_time=last_report_time,
+        ))
+
+    return SensorHealthDashboardResponse(zone_name=zone_name, sensors=result)
