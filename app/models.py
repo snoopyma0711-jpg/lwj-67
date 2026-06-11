@@ -48,15 +48,18 @@ class Alert(Base):
     __tablename__ = "alerts"
     __table_args__ = (
         Index("ix_alerts_zone_status", "zone_id", "status"),
+        Index("ix_alerts_zone_level", "zone_id", "level"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     zone_id = Column(Integer, ForeignKey("zones.id"), nullable=False)
     sensor_id = Column(String(64), nullable=False)
     alert_type = Column(String(32), nullable=False)
+    level = Column(String(16), nullable=False, default="警告")
     started_at = Column(DateTime, nullable=False)
     duration_seconds = Column(Integer, nullable=False)
     status = Column(String(16), nullable=False, default="unprocessed")
+    resolved_at = Column(DateTime, nullable=True)
     resolved_note = Column(Text, nullable=True)
 
     zone = relationship("Zone", back_populates="alerts")

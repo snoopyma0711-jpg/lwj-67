@@ -52,6 +52,7 @@ class AlertItem(BaseModel):
     zone_name: str
     sensor_id: str
     alert_type: str
+    level: str
     started_at: datetime
     duration_seconds: int
     status: str
@@ -65,3 +66,14 @@ class AlertListResponse(BaseModel):
 
 class ResolveAlertRequest(BaseModel):
     resolved_note: str = Field(..., min_length=1)
+
+
+class ZoneAlertStats(BaseModel):
+    zone_name: str
+    normal_count: int
+    urgent_count: int
+    avg_response_seconds: Optional[float] = None
+
+
+class AlertStatsResponse(BaseModel):
+    stats: list[ZoneAlertStats]

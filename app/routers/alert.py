@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
+from datetime import datetime
 from app.database import get_db
 from app.models import Alert, Zone
-from app.schemas import AlertItem, AlertListResponse, ResolveAlertRequest
+from app.schemas import AlertItem, AlertListResponse, ResolveAlertRequest, AlertStatsResponse, ZoneAlertStats
 
 router = APIRouter(prefix="/api/alerts", tags=["告警管理"])
 
@@ -11,6 +13,7 @@ router = APIRouter(prefix="/api/alerts", tags=["告警管理"])
 def list_alerts(
     zone_name: str = Query(None, description="区域名称"),
     status: str = Query(None, description="状态筛选: unprocessed / processed"),
+    level: str = Query(None, description="等级筛选: 警告 / 紧急"),
     db: Session = Depends(get_db),
 ):
     query = db.query(Alert)
@@ -25,6 +28,9 @@ def list_alerts(
     if status:
         query = query.filter(Alert.status == status)
 
+    if level:
+        query = query.filter(Alert.level == level)
+
     query = query.order_by(Alert.id.desc())
     total = query.count()
     alerts = query.all()
@@ -38,6 +44,7 @@ def list_alerts(
             zone_name=zone_map.get(a.zone_id, "unknown"),
             sensor_id=a.sensor_id,
             alert_type=a.alert_type,
+            level=a.level,
             started_at=a.started_at,
             duration_seconds=a.duration_seconds,
             status=a.status,
@@ -54,6 +61,48 @@ def resolve_alert(alert_id: int, req: ResolveAlertRequest, db: Session = Depends
         return {"message": "告警记录不存在"}
 
     alert.status = "processed"
+    alert.resolved_at = datetime.utcnow()
     alert.resolved_note = req.resolved_note
     db.commit()
     return {"message": "告警已处理", "alert_id": alert_id}
+
+
+@router.get("/stats", response_model=AlertStatsResponse, summary="告警统计")
+def alert_stats(
+    start_time: datetime = Query(..., description="统计开始时间"),
+    end_time: datetime = Query(..., description="统计结束时间"),
+    db: Session = Depends(get_db),
+):
+    zones = db.query(Zone).all()
+    stats = []
+
+    for zone in zones:
+        alerts = db.query(Alert).filter(
+            and_(
+                Alert.zone_id == zone.id,
+                Alert.started_at >= start_time,
+                Alert.started_at <= end_time,
+            )
+        ).all()
+
+        normal_count = sum(1 for a in alerts if a.level == "警告")
+        urgent_count = sum(1 for a in alerts if a.level == "紧急")
+
+        processed_alerts = [a for a in alerts if a.status == "processed" and a.resolved_at]
+        if processed_alerts:
+            total_response_seconds = sum(
+                (a.resolved_at - a.started_at).total_seconds()
+                for a in processed_alerts
+            )
+            avg_response = total_response_seconds / len(processed_alerts)
+        else:
+            avg_response = None
+
+        stats.append(ZoneAlertStats(
+            zone_name=zone.name,
+            normal_count=normal_count,
+            urgent_count=urgent_count,
+            avg_response_seconds=avg_response,
+        ))
+
+    return AlertStatsResponse(stats=stats)

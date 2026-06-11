@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from app.models import Sensor, Zone, ConsecutiveExceed, Alert
-from datetime import datetime
+from datetime import datetime, timedelta
 
 
 def check_and_update_alerts(db: Session, sensor_id: str, temperature: float, humidity: float, timestamp: datetime):
@@ -54,14 +55,52 @@ def _process_exceed_type(
                 zone_id=zone.id,
                 sensor_id=sensor_id,
                 alert_type=exceed_type,
+                level="警告",
                 started_at=record.first_exceeded_at,
                 duration_seconds=duration,
                 status="unprocessed",
             )
             db.add(alert)
+            db.flush()
+            _check_and_create_urgent_alert(db, zone.id, timestamp)
             record.count = 0
             record.first_exceeded_at = None
     else:
         if record is not None:
             record.count = 0
             record.first_exceeded_at = None
+
+
+def _check_and_create_urgent_alert(db: Session, zone_id: int, timestamp: datetime):
+    thirty_minutes_ago = timestamp - timedelta(minutes=30)
+
+    unprocessed_normal_count = db.query(Alert).filter(
+        and_(
+            Alert.zone_id == zone_id,
+            Alert.level == "警告",
+            Alert.status == "unprocessed",
+            Alert.started_at >= thirty_minutes_ago,
+        )
+    ).count()
+
+    if unprocessed_normal_count >= 5:
+        existing_urgent = db.query(Alert).filter(
+            and_(
+                Alert.zone_id == zone_id,
+                Alert.level == "紧急",
+                Alert.status == "unprocessed",
+                Alert.started_at >= thirty_minutes_ago,
+            )
+        ).first()
+
+        if not existing_urgent:
+            urgent_alert = Alert(
+                zone_id=zone_id,
+                sensor_id="system",
+                alert_type="escalation",
+                level="紧急",
+                started_at=timestamp,
+                duration_seconds=0,
+                status="unprocessed",
+            )
+            db.add(urgent_alert)
