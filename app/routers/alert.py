@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_, case
 from datetime import datetime, timedelta
 from app.database import get_db
 from app.models import Alert, Zone, Sensor, SensorData
@@ -129,26 +129,37 @@ def sensor_health_dashboard(
     expected_reports = 720
     min_reports_threshold = int(expected_reports * 0.8)
 
+    temp_exceed_expr = or_(
+        SensorData.temperature < zone.temp_lower,
+        SensorData.temperature > zone.temp_upper,
+    )
+    humidity_exceed_expr = or_(
+        SensorData.humidity < zone.humidity_lower,
+        SensorData.humidity > zone.humidity_upper,
+    )
+    exceed_expr = or_(temp_exceed_expr, humidity_exceed_expr)
+
     result = []
     for sensor in sensors:
         sensor_id = sensor.sensor_id
 
-        recent_data = db.query(SensorData).filter(
+        stats = db.query(
+            func.count(SensorData.id).label("report_count"),
+            func.sum(case((exceed_expr, 1), else_=0)).label("exceed_count"),
+        ).filter(
             and_(
                 SensorData.sensor_id == sensor_id,
                 SensorData.timestamp >= one_hour_ago,
             )
-        ).order_by(SensorData.timestamp.asc()).all()
+        ).first()
 
-        report_count = len(recent_data)
-        last_report_time = recent_data[-1].timestamp if recent_data else None
+        report_count = stats.report_count or 0
+        exceed_count = stats.exceed_count or 0
 
-        exceed_count = 0
-        for data in recent_data:
-            temp_exceeded = data.temperature < zone.temp_lower or data.temperature > zone.temp_upper
-            humidity_exceeded = data.humidity < zone.humidity_lower or data.humidity > zone.humidity_upper
-            if temp_exceeded or humidity_exceeded:
-                exceed_count += 1
+        last_data = db.query(SensorData.timestamp).filter(
+            SensorData.sensor_id == sensor_id,
+        ).order_by(SensorData.timestamp.desc()).first()
+        last_report_time = last_data.timestamp if last_data else None
 
         if report_count < min_reports_threshold:
             status = "离线"
