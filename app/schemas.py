@@ -91,3 +91,17 @@ class SensorHealthItem(BaseModel):
 class SensorHealthDashboardResponse(BaseModel):
     zone_name: str
     sensors: list[SensorHealthItem]
+
+
+class ExportDataItem(BaseModel):
+    sensor_id: str
+    temperature: float
+    humidity: float
+    timestamp: datetime
+    is_exceeded: bool
+
+
+class ExportListResponse(BaseModel):
+    zone_name: str
+    total: int
+    data: list[ExportDataItem]

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from app.database import engine, Base
-from app.routers import init, data, query, alert
+from app.routers import init, data, query, alert, export
 
 Base.metadata.create_all(bind=engine)
 
@@ -10,6 +10,7 @@ app.include_router(init.router)
 app.include_router(data.router)
 app.include_router(query.router)
 app.include_router(alert.router)
+app.include_router(export.router)
 
 
 @app.get("/health", summary="健康检查")
