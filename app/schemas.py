@@ -105,3 +105,43 @@ class ExportListResponse(BaseModel):
     zone_name: str
     total: int
     data: list[ExportDataItem]
+
+
+class FluctuationSensorItem(BaseModel):
+    sensor_id: str
+    fluctuation_count: int
+    max_temp_change: float
+    max_humidity_change: float
+    last_fluctuation_time: datetime
+
+
+class FluctuationAnalysisResponse(BaseModel):
+    zone_name: str
+    start_time: datetime
+    end_time: datetime
+    threshold: float
+    total: int
+    sensors: list[FluctuationSensorItem]
+
+
+class FluctuationDataPoint(BaseModel):
+    temperature: float
+    humidity: float
+    timestamp: datetime
+
+
+class FluctuationDetailItem(BaseModel):
+    before: FluctuationDataPoint
+    after: FluctuationDataPoint
+    temp_change: float
+    humidity_change: float
+
+
+class FluctuationDetailResponse(BaseModel):
+    zone_name: str
+    sensor_id: str
+    start_time: datetime
+    end_time: datetime
+    threshold: float
+    total: int
+    fluctuations: list[FluctuationDetailItem]
