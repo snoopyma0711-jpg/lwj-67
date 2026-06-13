@@ -145,3 +145,62 @@ class FluctuationDetailResponse(BaseModel):
     threshold: float
     total: int
     fluctuations: list[FluctuationDetailItem]
+
+
+class LongestAlertItem(BaseModel):
+    id: int
+    sensor_id: str
+    alert_type: str
+    level: str
+    started_at: datetime
+    duration_seconds: int
+
+
+class MostFluctuationSensorItem(BaseModel):
+    sensor_id: str
+    fluctuation_count: int
+    max_temp_change: float
+    max_humidity_change: float
+
+
+class ZoneDailyReportItem(BaseModel):
+    zone_name: str
+    reported_sensor_count: int
+    actual_report_count: int
+    missing_sensor_count: int
+    alert_count: int
+    longest_alert: Optional[LongestAlertItem] = None
+    most_fluctuation_sensor: Optional[MostFluctuationSensorItem] = None
+    earliest_report_time: Optional[datetime] = None
+    latest_report_time: Optional[datetime] = None
+
+
+class DailyReportOverview(BaseModel):
+    total_report_count: int
+    total_alert_count: int
+    worst_missing_zone: Optional[str] = None
+    worst_missing_count: int = 0
+
+
+class DailyReportResponse(BaseModel):
+    date: str
+    overview: DailyReportOverview
+    zones: list[ZoneDailyReportItem]
+
+
+class MissingPeriodItem(BaseModel):
+    start_time: datetime
+    end_time: datetime
+    duration_seconds: int
+
+
+class MissingSensorDetail(BaseModel):
+    sensor_id: str
+    missing_periods: list[MissingPeriodItem]
+
+
+class MissingDetailResponse(BaseModel):
+    zone_name: str
+    date: str
+    total_missing_sensors: int
+    sensors: list[MissingSensorDetail]
